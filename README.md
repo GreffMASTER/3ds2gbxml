@@ -1,8 +1,8 @@
 # 3ds2gbxml
 Convert .3ds model files to GBXML visual and surface model files.
 
-This is a very experimental tool for converting .3ds model files to GBX XML files that can be used to create Solid.Gbx by using the template provided in the repository.
-
+This is a very experimental tool for converting .3ds model files to GBX XML files that can be used to create Solid.Gbx by using the template provided in the repository.  
+Created for TrackMania 1.0, but technically works in TMO, TMS and even TMN.  
 Requires Python3 and NumPy.
 
 From "HowTo.txt":
