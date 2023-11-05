@@ -1,4 +1,5 @@
 import logging
+import math
 import xml.etree.ElementTree as ET
 from modules.threedees import FacesDescription, TriangularMesh, VerticesList, FacesMaterial, ObjectBlock
 from CPlugErrors import NoTrimeshError, NoVerticesError, NoFacesError
@@ -29,14 +30,12 @@ SURF_DICT = {
     'Snow': 21
 }
 
-
 GBX_XML_HEADER = {
     'version': '6',
     'unknown': 'R',
     'class': '0900D000',
     'complvl': '1'
 }
-
 
 GBX_XML_HEADER_GEOM = {
     'version': '6',
@@ -157,36 +156,38 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
 
         _set_value(chunk, 'uint32', '2')  # MeshOctreeCellVersion
 
+        max_x, max_y, max_z = 0, 0, 0
+        min_x = vertices.vertices[1].pos[0]
+        min_y = vertices.vertices[1].pos[1]
+        min_z = vertices.vertices[1].pos[2]
+        for v in vertices.vertices:
+            if v.pos[0] > max_x: max_x = v.pos[0]
+            if v.pos[1] > max_y: max_y = v.pos[1]
+            if v.pos[2] > max_z: max_z = v.pos[2]
+            if v.pos[0] < min_x: min_x = v.pos[0]
+            if v.pos[1] < min_y: min_y = v.pos[1]
+            if v.pos[2] < min_z: min_z = v.pos[2]
+
+        cen_x = (max_x - abs(min_x)) / 2
+        cen_y = (max_y - abs(min_y)) / 2
+        cen_z = (max_z - abs(min_z)) / 2
+        siz_x = (max_x + abs(min_x)) / 2
+        siz_y = (max_y + abs(min_y)) / 2
+        siz_z = (max_z + abs(min_z)) / 2
+
         lst = ET.Element('list')
-        # TODO implement MeshOctreeCells
-        """ 
-        i = 0
-        for vertex in vertices.vertices:
-    
-            le = ET.Element('element')
-    
-            value = ET.Element('uint32')
-            value.text = '1'
-            le.append(value)
-    
-            value = ET.Element('vec3')
-            value.text = f'{vertex[0]} {vertex[1]} {vertex[2]}'
-            le.append(value)
-    
-            value = ET.Element('vec3')
-            value.text = f'{vertex[0]/16} {vertex[1]/16} {vertex[2]/16}'
-            le.append(value)
-    
-            value = ET.Element('uint32')
-            value.text = str(i)
-            le.append(value)
-    
-            lst.append(le)
-            i += 1
-        """
+        ole = ET.Element('element')
+
+        _set_value(ole, 'int32', '1')
+        _set_value(ole, 'vec3', f'{cen_x} {cen_y} {cen_z}')
+        _set_value(ole, 'vec3', f'{siz_x} {siz_y} {siz_z}')
+        _set_value(ole, 'int32', '-1')
+
+        lst.append(ole)
+
+        # TODO properly implement MeshOctreeCells
 
         chunk.append(lst)
-
         body.append(chunk)
     else:
         match name_data[1]:
