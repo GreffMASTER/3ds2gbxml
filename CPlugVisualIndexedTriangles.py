@@ -92,6 +92,8 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
         logging.info(f'Base UV: {len(base_uv.uv)}')
     if uv_list:
         logging.info(f'UV count: {len(uv_list.uv_list)}')
+        for i in range(len(uv_list.uv_list)):
+            logging.info(f'--- Count: {len(uv_list.uv_list[i])}')
     logging.info(f'Vertex: {len(vertices.vertices)}')
     logging.info(f'Polygons: {len(triangles.polygons)}')
     if colors:
@@ -176,28 +178,33 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     value.text = str(len(vertices.vertices))
     chunk.append(value)
 
-    if base_uv:
-        if uv_list:
-            for uv in uv_list.uv_list:
-                logging.info(f'Doing uv {uv}')
-                value = ET.Element('bool')
-                value.text = '0'
-                chunk.append(value)
-
-                for uv_coord in uv:
-                    value = ET.Element('vec2')
-                    value.text = f'{uv_coord[0]} {uv_coord[1]}'
-                    logging.info(value.text)
-                    chunk.append(value)
-        else:
+    if uv_list:
+        logging.info('Writing Additional UVs')
+        for i, uv in enumerate(uv_list.uv_list):
+            logging.info(f'{i}')
             value = ET.Element('bool')
             value.text = '0'
             chunk.append(value)
 
-            for uv_coord in uv.uv:
+            for uv_coord in uv:
                 value = ET.Element('vec2')
                 value.text = f'{uv_coord[0]} {uv_coord[1]}'
+                logging.info(value.text)
                 chunk.append(value)
+    elif base_uv:
+        logging.info('Writing Base UV')
+        value = ET.Element('bool')
+        value.text = '0'
+        chunk.append(value)
+
+        for uv_coord in base_uv.uv:
+            value = ET.Element('vec2')
+            value.text = f'{uv_coord[0]} {uv_coord[1]}'
+            logging.info(value.text)
+            chunk.append(value)
+        
+        
+
 
     value = ET.Element('bool')
     value.text = '1'
