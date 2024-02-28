@@ -147,11 +147,11 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     chunk.append(value)
     # If has UV map
     if uv:
-        value = ET.Element('bool')
-        value.text = '1'
+        value = ET.Element('int32')
+        value.text = '2'
         chunk.append(value)
     else:
-        value = ET.Element('bool')
+        value = ET.Element('int32')
         value.text = '0'
         chunk.append(value)
 
@@ -173,6 +173,15 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
         for uv_coord in uv.uv:
             value = ET.Element('vec2')
             value.text = f'{uv_coord[0]} {uv_coord[1]}'
+            chunk.append(value)
+
+        value = ET.Element('bool')
+        value.text = '0'
+        chunk.append(value)
+
+        for uv_coord in uv.uv:
+            value = ET.Element('vec2')
+            value.text = f'0 0'
             chunk.append(value)
 
     value = ET.Element('bool')

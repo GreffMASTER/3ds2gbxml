@@ -27,7 +27,16 @@ SURF_DICT = {
     'WetAsphalt': 18,
     'WetPavement': 19,
     'WetGrass': 20,
-    'Snow': 21
+    'Snow': 21,
+    'ResonantMetal': 22,
+    'GolfBall': 23,
+    'GolfWall': 24,
+    'GolfGround': 25,
+    'Turbo2': 26,
+    'Bumper': 27,
+    'NotCollidable': 28,
+    'FreeWheeling': 29,
+    'TurboRoulette': 30
 }
 
 GBX_XML_HEADER = {
@@ -56,42 +65,78 @@ def _set_value(node: ET.Element, v_type: str, value: str):
     node.append(new_node)
 
 
-def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
-    name_data = model_object.name.split('$')
-    logging.info(f'Converting "{name_data[0]}" to Surface...')
-    vertices = None
-    triangles = None
-    material = None
+def _isnumber(text: str):
+    try:
+        int(text)
+        return True
+    except Exception:
+        return False
 
-    trimesh: TriangularMesh = model_object.children[0]
-    if not trimesh or not isinstance(trimesh, TriangularMesh):
-        raise NoTrimeshError
 
-    for child in trimesh.children:
-        if isinstance(child, VerticesList):
-            vertices = child
-        if isinstance(child, FacesDescription):
-            triangles = child
-    for child in triangles.children:
-        if isinstance(child, FacesMaterial):
-            material = child
+def create_xml(objects: list) -> ET.ElementTree:
+    # Prepare objects
 
-    if not triangles:
+    logging.info(f'Converting all objects to one Surface...')
+
+    vert_count = 0
+    face_count = 0
+    vertices_all = []
+    triangles_all = []
+    materials_all = {}
+
+    
+
+    for model_object in objects:
+        new_vert_count = 0
+        new_face_count = 0
+
+        trimesh: TriangularMesh = model_object.children[0]
+        if not trimesh or not isinstance(trimesh, TriangularMesh):
+            raise NoTrimeshError
+        
+        tris = None
+
+        for child in trimesh.children:
+            if isinstance(child, VerticesList):
+                new_vert_count = len(child.vertices)
+                vertices_all = vertices_all + child.vertices
+
+            if isinstance(child, FacesDescription):
+                tris = child
+                temp = child.polygons.copy()
+                for i in range(len(temp)):  # Update vertex references
+                    poly = temp[i]
+                    new_poly = (poly[0] + vert_count, poly[1] + vert_count, poly[2] + vert_count)
+                    temp[i] = new_poly
+                new_face_count = len(temp)
+                triangles_all = triangles_all + temp
+                
+
+        if child:
+            for child in tris.children:
+                if isinstance(child, FacesMaterial):
+                    name = child.material_name
+                    temp = child.applied_faces.copy()
+                    for i in range(len(temp)):  # Update vertex references
+                        temp[i] = temp[i] + vert_count
+                        materials_all[temp[i]] = name
+
+        vert_count = vert_count + new_vert_count
+        face_count = face_count + new_face_count
+
+    if len(triangles_all) == 0:
         raise NoFacesError
-    if not vertices:
+    if len(vertices_all) == 0:
         raise NoVerticesError
 
-    if material:
-        logging.info(f'Material: "{material.material_name}"')
-    logging.info(f'Vertex: {len(vertices.vertices)}')
-    logging.info(f'Polygons: {len(triangles.polygons)}')
+    logging.info(f'Vertex: {len(vertices_all)}')
+    logging.info(f'Polygons: {len(triangles_all)}')
+
+    # Do the thing
 
     gbx = ET.Element('gbx')
 
-    if len(name_data) < 2:
-        _set_multiple(gbx, GBX_XML_HEADER)
-    else:
-        _set_multiple(gbx, GBX_XML_HEADER_GEOM)
+    _set_multiple(gbx, GBX_XML_HEADER)
 
     body = ET.Element('body')
 
@@ -105,108 +150,92 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     _set_value(chunk, 'uint32', '1')
     body.append(chunk)
 
-    if len(name_data) < 2:
 
-        chunk = ET.Element('chunk')
-        _set_multiple(chunk, {'class': '0900D000', 'id': '002'})
-        _set_value(chunk, 'uint32', '2')  # version
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': '0900D000', 'id': '002'})
+    _set_value(chunk, 'uint32', '2')  # version
 
-        lst = ET.Element('list')
+    lst = ET.Element('list')
 
-        for vertex in vertices.vertices:
-            le = ET.Element('element')
-            _set_value(le, 'vec3', f'{vertex.pos[0]} {vertex.pos[1]} {vertex.pos[2]}')
-            lst.append(le)
+    for vertex in vertices_all:
+        le = ET.Element('element')
+        _set_value(le, 'vec3', f'{vertex.pos[0]} {vertex.pos[1]} {vertex.pos[2]}')
+        lst.append(le)
 
-        chunk.append(lst)
+    chunk.append(lst)
 
-        lst = ET.Element('list')
+    lst = ET.Element('list')
 
-        i = 0
-        for polygon in triangles.polygons:
-            le = ET.Element('element')
-            v_a = numpy.array(vertices.vertices[polygon[0]].pos)
-            v_b = numpy.array(vertices.vertices[polygon[1]].pos)
-            v_c = numpy.array(vertices.vertices[polygon[2]].pos)
-            direct = numpy.cross(v_b - v_a, v_c - v_a)
-            direct = direct / numpy.linalg.norm(direct)
-            print(direct)
-            _set_value(le, 'vec4', f'{direct[0]} {direct[1]} {direct[2]} {-vertices.vertices[polygon[0]].pos[1]}')
-            _set_value(le, 'uint32', str(polygon[0]))
-            _set_value(le, 'uint32', str(polygon[1]))
-            _set_value(le, 'uint32', str(polygon[2]))
-            # SurfaceType
-            value = ET.Element('uint16')
-            if material:
-                surf_type = SURF_DICT.get(material.material_name)
-                if surf_type:
-                    if i in material.applied_faces:
-                        value.text = str(surf_type)
-                else:
-                    value.text = '0'
+    i = 0
+    for polygon in triangles_all:
+        le = ET.Element('element')
+        v_a = numpy.array(vertices_all[polygon[0]].pos)
+        v_b = numpy.array(vertices_all[polygon[1]].pos)
+        v_c = numpy.array(vertices_all[polygon[2]].pos)
+        direct = numpy.cross(v_b - v_a, v_c - v_a)
+        direct = direct / numpy.linalg.norm(direct)
+        _set_value(le, 'vec4', f'{direct[0]} {direct[1]} {direct[2]} {-vertices_all[polygon[0]].pos[1]}')
+        _set_value(le, 'uint32', str(polygon[0]))
+        _set_value(le, 'uint32', str(polygon[1]))
+        _set_value(le, 'uint32', str(polygon[2]))
+
+        # SurfaceType
+
+        value = ET.Element('uint16')
+        mat = materials_all.get(i)
+        if mat:
+            surf_type = SURF_DICT.get(mat)
+            if surf_type:
+                value.text = str(surf_type)
+            elif _isnumber(mat):
+                value.text = mat
             else:
                 value.text = '0'
-            le.append(value)
-            _set_value(le, 'uint8', '0')
-            _set_value(le, 'uint8', '0')
-            lst.append(le)
-            i += 1
+        else:
+            value.text = '0'
+        le.append(value)
+        _set_value(le, 'uint8', '0')
+        _set_value(le, 'uint8', '0')
+        lst.append(le)
+        i += 1
 
-        chunk.append(lst)
+    chunk.append(lst)
 
-        _set_value(chunk, 'uint32', '2')  # MeshOctreeCellVersion
+    _set_value(chunk, 'uint32', '2')  # MeshOctreeCellVersion
 
-        max_x, max_y, max_z = 0, 0, 0
-        min_x = vertices.vertices[1].pos[0]
-        min_y = vertices.vertices[1].pos[1]
-        min_z = vertices.vertices[1].pos[2]
-        for v in vertices.vertices:
-            if v.pos[0] > max_x: max_x = v.pos[0]
-            if v.pos[1] > max_y: max_y = v.pos[1]
-            if v.pos[2] > max_z: max_z = v.pos[2]
-            if v.pos[0] < min_x: min_x = v.pos[0]
-            if v.pos[1] < min_y: min_y = v.pos[1]
-            if v.pos[2] < min_z: min_z = v.pos[2]
+    max_x, max_y, max_z = 0, 0, 0
+    min_x = vertices_all[1].pos[0]
+    min_y = vertices_all[1].pos[1]
+    min_z = vertices_all[1].pos[2]
+    for v in vertices_all:
+        if v.pos[0] > max_x: max_x = v.pos[0]
+        if v.pos[1] > max_y: max_y = v.pos[1]
+        if v.pos[2] > max_z: max_z = v.pos[2]
+        if v.pos[0] < min_x: min_x = v.pos[0]
+        if v.pos[1] < min_y: min_y = v.pos[1]
+        if v.pos[2] < min_z: min_z = v.pos[2]
 
-        cen_x = (max_x - abs(min_x)) / 2
-        cen_y = (max_y - abs(min_y)) / 2
-        cen_z = (max_z - abs(min_z)) / 2
-        siz_x = (max_x + abs(min_x)) / 2
-        siz_y = (max_y + abs(min_y)) / 2
-        siz_z = (max_z + abs(min_z)) / 2
+    cen_x = (max_x - abs(min_x)) / 2
+    cen_y = (max_y - abs(min_y)) / 2
+    cen_z = (max_z - abs(min_z)) / 2
+    siz_x = (max_x + abs(min_x)) / 2
+    siz_y = (max_y + abs(min_y)) / 2
+    siz_z = (max_z + abs(min_z)) / 2
 
-        lst = ET.Element('list')
-        ole = ET.Element('element')
+    lst = ET.Element('list')
+    ole = ET.Element('element')
 
-        _set_value(ole, 'int32', '1')
-        _set_value(ole, 'vec3', f'{cen_x} {cen_y} {cen_z}')
-        _set_value(ole, 'vec3', f'{siz_x} {siz_y} {siz_z}')
-        _set_value(ole, 'int32', '-1')
+    _set_value(ole, 'int32', '1')
+    _set_value(ole, 'vec3', f'{cen_x} {cen_y} {cen_z}')
+    _set_value(ole, 'vec3', f'{siz_x} {siz_y} {siz_z}')
+    _set_value(ole, 'int32', '-1')
 
-        lst.append(ole)
+    lst.append(ole)
 
-        # TODO properly implement MeshOctreeCells
+    # TODO properly implement MeshOctreeCells
 
-        chunk.append(lst)
-        body.append(chunk)
-    else:
-        match name_data[1]:
-            case 'Sphere':
-                chunk = ET.Element('chunk')
-                _set_multiple(chunk, {'class': '0900F000', 'id': '002'})
-                _set_value(chunk, 'uint32', '0')
-                width = 0.5
-                logging.info(f'Sphere width: {width}')
-                _set_value(chunk, 'float', str(width))
-                if material:
-                    surf_type = SURF_DICT.get(material.material_name)
-                    if surf_type:
-                        _set_value(chunk, 'uint16', str(surf_type))
-                    else:
-                        _set_value(chunk, 'uint16', '0')
-                else:
-                    _set_value(chunk, 'uint16', '0')
-                body.append(chunk)
+    chunk.append(lst)
+    body.append(chunk)
 
     # Pack it up to ElementTree
     gbx.append(body)

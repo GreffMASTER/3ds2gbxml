@@ -44,4 +44,13 @@ WetAsphalt
 WetPavement
 WetGrass
 Snow
+ResonantMetal
+GolfBall
+GolfWall
+GolfGround
+Turbo2
+Bumper
+NotCollidable
+FreeWheeling
+TurboRoulette
 ```
