@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 import xml.etree.ElementTree as ET
-from modules.threedees import FacesDescription, TriangularMesh, VerticesList, MappingCoordinates, ObjectBlock, Vertex, \
+from modules.threedees import FacesDescription, MappingCoordinatesList, TriangularMesh, VerticesList, MappingCoordinates, ObjectBlock, Vertex, \
     VertexColors
 from CPlugErrors import NoTrimeshError, NoVerticesError, NoFacesError
 
@@ -60,7 +60,8 @@ def _set_multiple(node: ET.Element, attrib: dict):
 def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     logging.info(f'Converting "{model_object.name}" to VisualMesh...')
 
-    uv = None
+    base_uv = None
+    uv_list = None
     vertices = None
     triangles = None
     colors = None
@@ -72,21 +73,25 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
 
     for child in trimesh.children:
         if isinstance(child, MappingCoordinates):
-            uv = child
+            base_uv = child
         if isinstance(child, VerticesList):
             vertices = child
         if isinstance(child, FacesDescription):
             triangles = child
         if isinstance(child, VertexColors):
             colors = child
+        if isinstance(child, MappingCoordinatesList):
+            uv_list = child
 
     if not triangles:
         raise NoFacesError
     if not vertices:
         raise NoVerticesError
 
-    if uv:
-        logging.info(f'UV: {len(uv.uv)}')
+    if base_uv:
+        logging.info(f'Base UV: {len(base_uv.uv)}')
+    if uv_list:
+        logging.info(f'UV count: {len(uv_list.uv_list)}')
     logging.info(f'Vertex: {len(vertices.vertices)}')
     logging.info(f'Polygons: {len(triangles.polygons)}')
     if colors:
@@ -146,14 +151,20 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     value.text = '1'
     chunk.append(value)
     # If has UV map
-    if uv:
-        value = ET.Element('int32')
-        value.text = '2'
-        chunk.append(value)
+    if base_uv:
+        if uv_list:
+            value = ET.Element('int32')
+            value.text = str(len(uv_list.uv_list))
+            chunk.append(value)
+        else:
+            value = ET.Element('int32')
+            value.text = '1'
+            chunk.append(value)
     else:
         value = ET.Element('int32')
         value.text = '0'
         chunk.append(value)
+
 
     # SkinFlags(?)
     value = ET.Element('bool')
@@ -165,24 +176,28 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     value.text = str(len(vertices.vertices))
     chunk.append(value)
 
-    if uv:
-        value = ET.Element('bool')
-        value.text = '0'
-        chunk.append(value)
+    if base_uv:
+        if uv_list:
+            for uv in uv_list.uv_list:
+                logging.info(f'Doing uv {uv}')
+                value = ET.Element('bool')
+                value.text = '0'
+                chunk.append(value)
 
-        for uv_coord in uv.uv:
-            value = ET.Element('vec2')
-            value.text = f'{uv_coord[0]} {uv_coord[1]}'
+                for uv_coord in uv:
+                    value = ET.Element('vec2')
+                    value.text = f'{uv_coord[0]} {uv_coord[1]}'
+                    logging.info(value.text)
+                    chunk.append(value)
+        else:
+            value = ET.Element('bool')
+            value.text = '0'
             chunk.append(value)
 
-        value = ET.Element('bool')
-        value.text = '0'
-        chunk.append(value)
-
-        for uv_coord in uv.uv:
-            value = ET.Element('vec2')
-            value.text = f'0 0'
-            chunk.append(value)
+            for uv_coord in uv.uv:
+                value = ET.Element('vec2')
+                value.text = f'{uv_coord[0]} {uv_coord[1]}'
+                chunk.append(value)
 
     value = ET.Element('bool')
     value.text = '1'

@@ -95,6 +95,8 @@ class Chunk:
                         self.children.append(FacesMaterial(chunk_data))
                     case 0x4140:
                         self.children.append(MappingCoordinates(chunk_data))
+                    case 0x4145:
+                        self.children.append(MappingCoordinatesList(chunk_data))
                     case 0x4150:
                         self.children.append(SmoothGroup(chunk_data))
                     case 0x4160:
@@ -248,6 +250,30 @@ class MappingCoordinates(Chunk):
                 uv_element = struct.unpack('<ff', self.file.read(8))
                 self.uv.append(uv_element)
             logging.info(f'UV Size: {len(self.uv)}')
+        except struct.error as e:
+            raise DataError(self.file.tell(), e.args)
+        except DataError:
+            raise
+
+
+class MappingCoordinatesList(Chunk):
+    uv_list: list = []
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.children: list = []
+            self.uv_list: list = []
+
+            count = struct.unpack('<H', self.file.read(2))[0]
+            for i in range(count):
+                uv_coords: list = []
+                count2 = struct.unpack('<H', self.file.read(2))[0]
+                for j in range(count2):
+                    uv_element = struct.unpack('<ff', self.file.read(8))
+                    uv_coords.append(uv_element)
+                self.uv_list.append(uv_coords)
+            logging.info(f'UV List Size: {len(self.uv_list)}')
         except struct.error as e:
             raise DataError(self.file.tell(), e.args)
         except DataError:
