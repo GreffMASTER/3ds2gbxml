@@ -57,6 +57,294 @@ def _set_multiple(node: ET.Element, attrib: dict):
         node.set(key, value)
 
 
+def create_anim_xml(objects: list) -> ET.ElementTree:
+    logging.info(f'Converting objects to animated VisualMesh...')
+
+    base_object = objects[0]
+
+    base_uv = None
+    uv_list = None
+    vertices = None
+    triangles = None
+    colors = None
+    color_diff = 0
+
+    all_verts: list = []
+    all_norms: list = []
+    all_vert_count: int = 0
+
+    # get total vert count
+    for obj in objects:
+        mesh: TriangularMesh = obj.children[0]
+        if not mesh or not isinstance(mesh, TriangularMesh):
+            raise NoTrimeshError
+        for child in mesh.children:
+            if isinstance(child, VerticesList):
+                verts: VerticesList = child
+                all_vert_count += len(verts.vertices)
+                break
+
+    trimesh: TriangularMesh = base_object.children[0]
+    if not trimesh or not isinstance(trimesh, TriangularMesh):
+        raise NoTrimeshError
+
+    for child in trimesh.children:
+        if isinstance(child, MappingCoordinates):
+            base_uv = child
+        if isinstance(child, VerticesList):
+            vertices = child
+        if isinstance(child, FacesDescription):
+            triangles = child
+        if isinstance(child, VertexColors):
+            colors = child
+        if isinstance(child, MappingCoordinatesList):
+            uv_list = child
+
+    if not triangles:
+        raise NoFacesError
+    if not vertices:
+        raise NoVerticesError
+
+    if base_uv:
+        logging.info(f'Base UV: {len(base_uv.uv)}')
+    if uv_list:
+        logging.info(f'UV count: {len(uv_list.uv_list)}')
+        for i in range(len(uv_list.uv_list)):
+            logging.info(f'--- Count: {len(uv_list.uv_list[i])}')
+    logging.info(f'Vertex: {len(vertices.vertices)}')
+    logging.info(f'Polygons: {len(triangles.polygons)}')
+    if colors:
+        logging.info(f'Colors: {len(colors.vertex_colors)}')
+        # some weird fix that doesnt work
+        # i really need to make a new exporter instead
+        # color_diff = int((len(vertices.vertices) - len(colors.vertex_colors)) / 2)
+        # color_diff = len(vertices.vertices) - len(colors.vertex_colors)
+
+    normals = compute_normals(vertices.vertices, triangles.polygons)
+
+    gbx = ET.Element('gbx')
+    _set_multiple(gbx, GBX_XML_HEADER)
+
+    body = ET.Element('body')
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '001'})
+    chunk.append(ET.Element('node'))
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '004'})
+    chunk.append(ET.Element('node'))
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '005'})
+
+    list_xml = ET.Element('list')
+    for i, obj in enumerate(objects):
+        el_xml = ET.Element('element')
+
+        value = ET.Element('uint32')
+        value.text = f'{len(vertices.vertices) * i}'
+        el_xml.append(value)
+
+        value = ET.Element('uint32')
+        value.text = '0'
+        el_xml.append(value)
+
+        value = ET.Element('uint32')
+        value.text = f'{len(vertices.vertices) * 3}'
+        el_xml.append(value)
+
+        list_xml.append(el_xml)
+    chunk.append(list_xml)
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '006'})
+    # HasVertexNormals
+    value = ET.Element('uint32')
+    value.text = '1'
+    chunk.append(value)
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '007'})
+    value = ET.Element('uint32')
+    value.text = '0'
+    chunk.append(value)
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '008'})
+    # IsGeometryStatic
+    value = ET.Element('bool')
+    value.text = '1'
+    chunk.append(value)
+    # IsIndexationStatic
+    value = ET.Element('bool')
+    value.text = '1'
+    chunk.append(value)
+    # If has UV map
+    if base_uv:
+        if uv_list:
+            value = ET.Element('int32')
+            value.text = str(len(uv_list.uv_list))
+            chunk.append(value)
+        else:
+            value = ET.Element('int32')
+            value.text = '1'
+            chunk.append(value)
+    else:
+        value = ET.Element('int32')
+        value.text = '0'
+        chunk.append(value)
+
+    # SkinFlags(?)
+    value = ET.Element('bool')
+    value.text = '0'
+    chunk.append(value)
+
+    # Vertex count
+    value = ET.Element('uint32')
+    value.text = str(all_vert_count)
+    chunk.append(value)
+
+    if uv_list:
+        logging.info('Writing Additional UVs')
+        for i, uv in enumerate(uv_list.uv_list):
+            logging.info(f'{i}')
+            value = ET.Element('bool')
+            value.text = '0'
+            chunk.append(value)
+
+            for _ in objects:
+                for uv_coord in uv:
+                    value = ET.Element('vec2')
+                    value.text = f'{uv_coord[0]} {uv_coord[1]}'
+                    logging.info(value.text)
+                    chunk.append(value)
+    elif base_uv:
+        logging.info('Writing Base UV')
+        value = ET.Element('bool')
+        value.text = '0'
+        chunk.append(value)
+
+        for _ in objects:
+            for uv_coord in base_uv.uv:
+                value = ET.Element('vec2')
+                value.text = f'{uv_coord[0]} {uv_coord[1]}'
+                logging.info(value.text)
+                chunk.append(value)
+
+    value = ET.Element('bool')
+    value.text = '1'
+    chunk.append(value)
+
+    value = ET.Element('uint32')
+    value.text = '0'
+    chunk.append(value)
+
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual3D', 'id': '002'})
+    chunk.append(ET.Element('node'))
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisual3D', 'id': '003'})
+
+    # now do the subvisuals
+
+    for j, obj in enumerate(objects):
+        print(f'Converting frame {j}')
+        obj_vertices: VerticesList = None
+        obj_tris: FacesDescription = None
+        obj_colors: VertexColors = None
+        obj_mesh: TriangularMesh = obj.children[0]
+        if not obj_mesh or not isinstance(obj_mesh, TriangularMesh):
+            raise NoTrimeshError
+
+        for child in obj_mesh.children:
+            if isinstance(child, VerticesList):
+                obj_vertices: VerticesList = child
+            if isinstance(child, FacesDescription):
+                obj_tris: FacesDescription = child
+            if isinstance(child, VertexColors):
+                obj_colors: VertexColors = child
+
+        obj_normals = compute_normals(obj_vertices.vertices, obj_tris.polygons)
+
+        i = 0
+        last_color = (1, 1, 1)
+
+        for vertex in obj_vertices.vertices:
+            # Vertex position
+            value = ET.Element('vec3')
+            value.text = f'{vertex.pos[0]} {vertex.pos[1]} {vertex.pos[2]}'
+            chunk.append(value)
+            # Vertex normal
+            value = ET.Element('vec3')
+
+            normal = obj_normals[i]
+            txt = ''
+            for v in normal:
+                txt += f'{v} '
+            value.text = txt[:-1]
+            chunk.append(value)
+            # Vertex color
+            value = ET.Element('color')
+            if colors:
+                try:
+                    col = obj_colors.vertex_colors[i - color_diff]
+                    float_col = 1 / 255
+                    value.text = f'{float_col * col[0]} {float_col * col[1]} {float_col * col[2]}'
+                    last_color = (float_col * col[0], float_col * col[1], float_col * col[2])
+                except:
+                    value.text = f'{last_color[0]} {last_color[1]} {last_color[2]}'
+            else:
+                value.text = '1.0 1.0 1.0'
+            chunk.append(value)
+            # ???
+            value = ET.Element('float')
+            value.text = '1'
+            chunk.append(value)
+            i += 1
+        pass
+
+    value = ET.Element('uint32')
+    value.text = '0'
+    chunk.append(value)
+    chunk.append(value)
+    body.append(chunk)
+
+    chunk = ET.Element('chunk')
+    _set_multiple(chunk, {'class': 'CPlugVisualIndexed', 'id': '000'})
+    value = ET.Element('uint32')
+    value.text = str(len(triangles.polygons) * 3)
+    chunk.append(value)
+
+    for polygon in triangles.polygons:
+        value = ET.Element('uint16')
+        value.text = str(polygon[0])
+        chunk.append(value)
+        value = ET.Element('uint16')
+        value.text = str(polygon[1])
+        chunk.append(value)
+        value = ET.Element('uint16')
+        value.text = str(polygon[2])
+        chunk.append(value)
+
+    body.append(chunk)
+
+    # Pack it up to ElementTree
+    gbx.append(body)
+    tree = ET.ElementTree(gbx)
+
+    return tree
+
+
 def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     logging.info(f'Converting "{model_object.name}" to VisualMesh...')
 
@@ -98,10 +386,6 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     logging.info(f'Polygons: {len(triangles.polygons)}')
     if colors:
         logging.info(f'Colors: {len(colors.vertex_colors)}')
-        # some weird fix that doesnt work
-        # i really need to make a new exporter instead
-        #color_diff = int((len(vertices.vertices) - len(colors.vertex_colors)) / 2)
-        #color_diff = len(vertices.vertices) - len(colors.vertex_colors)
 
     normals = compute_normals(vertices.vertices, triangles.polygons)
 
