@@ -133,10 +133,10 @@ def _create_mesh(chunk: ET.Element, vertices_all: list, triangles_all: list, mat
         v_a = numpy.array(vertices_all[polygon[0]].pos)
         v_b = numpy.array(vertices_all[polygon[1]].pos)
         v_c = numpy.array(vertices_all[polygon[2]].pos)
-        direct = numpy.cross(v_b - v_a, v_c - v_a)
-        direct = direct / numpy.linalg.norm(direct)
-        _set_value(le, 'vec4', f'{direct[0]} {direct[1]} {direct[2]} {-vertices_all[polygon[0]].pos[1]}')
-        # idk what should be in position 4
+        cross = numpy.cross(v_b - v_a, v_c - v_a)
+        direct = cross / numpy.linalg.norm(cross)
+        dot = numpy.dot(direct, vertices_all[polygon[0]].pos)
+        _set_value(le, 'vec4', f'{direct[0]} {direct[1]} {direct[2]} {-dot}')
         # set polygon points
         _set_value(le, 'uint32', str(polygon[0]))
         _set_value(le, 'uint32', str(polygon[1]))

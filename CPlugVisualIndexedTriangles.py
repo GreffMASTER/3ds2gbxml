@@ -376,12 +376,17 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     if not vertices:
         raise NoVerticesError
 
+    base_uv_count = 0
     if base_uv:
-        logging.info(f'Base UV: {len(base_uv.uv)}')
+        base_uv_count = len(base_uv.uv)
+        logging.info(f'Base UV: {base_uv_count}')
     if uv_list:
         logging.info(f'UV count: {len(uv_list.uv_list)}')
         for i in range(len(uv_list.uv_list)):
-            logging.info(f'--- Count: {len(uv_list.uv_list[i])}')
+            new_uv_count = len(uv_list.uv_list[i])
+            logging.info(f'--- Count: {new_uv_count}')
+            if new_uv_count != base_uv_count:
+                raise Exception('UV Count mismatch!')
     logging.info(f'Vertex: {len(vertices.vertices)}')
     logging.info(f'Polygons: {len(triangles.polygons)}')
     if colors:
