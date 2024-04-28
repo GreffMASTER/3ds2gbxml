@@ -11,7 +11,7 @@ import CPlugVisualIndexedTriangles
 from CPlugErrors import NoTrimeshError, NoVerticesError, NoFacesError
 from modules.threedees import read_3ds, IncorrectFormatError, DataError, EditorChunk, ObjectBlock
 
-VERSION = '1.0.6_02'
+VERSION = '1.0.6_03'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

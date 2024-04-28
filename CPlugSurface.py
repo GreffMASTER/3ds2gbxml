@@ -145,7 +145,7 @@ def _create_mesh(chunk: ET.Element, vertices_all: list, triangles_all: list, mat
         mat = materials_all.get(i)  # get material name from face index
         if mat:
             surf_type = SURF_DICT.get(mat)  # try to get surface id by name
-            if surf_type:  # found
+            if surf_type is not None:  # found
                 value.text = str(surf_type)
             elif _is_number(mat):  # check if its a number instead
                 value.text = mat
