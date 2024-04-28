@@ -113,8 +113,26 @@ class Chunk:
                         self.children.append(MaterialBlock(chunk_data))
                     case 0xb000:
                         self.children.append(KeyFramerChunk(chunk_data))
+                    case 0xb002:
+                        self.children.append(KeyFramerObject(chunk_data))
+                    case 0xb008:
+                        self.children.append(Frames(chunk_data))
+                    case 0xb009:
+                        self.children.append(UnknownClass1(chunk_data))
                     case 0xb00a:
                         self.children.append(KeyFramerHDR(chunk_data))
+                    case 0xb010:
+                        self.children.append(KeyFramerObjectName(chunk_data))
+                    case 0xb013:
+                        self.children.append(KeyFramerObjectPivotPosition(chunk_data))
+                    case 0xb020:
+                        self.children.append(KeyFramerObjectPositionTrack(chunk_data))
+                    case 0xb021:
+                        self.children.append(KeyFramerObjectRotationTrack(chunk_data))
+                    case 0xb022:
+                        self.children.append(KeyFramerObjectScaleTrack(chunk_data))
+                    case 0xb030:
+                        self.children.append(KeyFramerObjectHierarchyPosition(chunk_data))
                     case _:
                         logging.warning(f'Unknown or unimplemented chunk "{hex(chunk_id)}", skipping...')
             except DataError:
@@ -485,6 +503,135 @@ class MainChunk(Chunk):
             super().__init__(data)
             self.children: list = []
             super()._load_children()
+        except DataError:
+            raise
+
+
+class Frames(Chunk):
+    start_frame: int = 0
+    end_frame: int = 0
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.start_frame = struct.unpack('<I', self.file.read(4))[0]
+            self.end_frame = struct.unpack('<I', self.file.read(4))[0]
+        except DataError:
+            raise
+
+
+class UnknownClass1(Chunk):
+    u1: int = 0
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.u1 = struct.unpack('<I', self.file.read(4))[0]
+        except DataError:
+            raise
+
+
+class KeyFramerObject(Chunk):
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.children: list = []
+            super()._load_children()
+        except DataError:
+            raise
+
+
+class KeyFramerObjectName(Chunk):
+    name: str = ''
+    u1: int = 0
+    u2: int = 0
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.name = _read_asciiz_string(self.file)
+            self.u1 = struct.unpack('<I', self.file.read(4))[0]
+            self.u2 = struct.unpack('<H', self.file.read(2))[0]
+        except DataError:
+            raise
+
+
+class KeyFramerObjectPivotPosition(Chunk):
+    x: float = 0
+    y: float = 0
+    z: float = 0
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.x = struct.unpack('<f', self.file.read(4))[0]
+            self.y = struct.unpack('<f', self.file.read(4))[0]
+            self.z = struct.unpack('<f', self.file.read(4))[0]
+        except DataError:
+            raise
+
+
+class KeyFramerObjectPositionTrack(Chunk):
+    frames: list = []
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.frames = []
+            self.file.read(10)  # idk
+            n_keys = self.u2 = struct.unpack('<H', self.file.read(2))[0]
+            self.file.read(2)  # idk
+            for i in range(n_keys):
+                frame = {
+                    'nframe': struct.unpack('<H', self.file.read(2))[0]
+                }
+                self.file.read(4)  # idk
+                frame['x'] = struct.unpack('<f', self.file.read(4))[0]
+                frame['y'] = struct.unpack('<f', self.file.read(4))[0]
+                frame['z'] = struct.unpack('<f', self.file.read(4))[0]
+        except DataError:
+            raise
+
+
+class KeyFramerObjectRotationTrack(Chunk):
+    frames: list = []
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.frames = []
+            self.file.read(10)  # idk
+            n_keys = self.u2 = struct.unpack('<H', self.file.read(2))[0]
+            self.file.read(2)  # idk
+            for i in range(n_keys):
+                frame = {
+                    'nframe': struct.unpack('<H', self.file.read(2))[0]
+                }
+                self.file.read(4)  # idk
+                frame['rad'] = struct.unpack('<f', self.file.read(4))[0]
+                frame['axis_x'] = struct.unpack('<f', self.file.read(4))[0]
+                frame['axis_y'] = struct.unpack('<f', self.file.read(4))[0]
+                frame['axis_z'] = struct.unpack('<f', self.file.read(4))[0]
+        except DataError:
+            raise
+
+
+class KeyFramerObjectScaleTrack(KeyFramerObjectPositionTrack):
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+
+        except DataError:
+            raise
+
+
+class KeyFramerObjectHierarchyPosition(Chunk):
+    u1: int = 0
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.u2 = struct.unpack('<H', self.file.read(2))[0]
         except DataError:
             raise
 
