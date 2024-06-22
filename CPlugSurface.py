@@ -163,23 +163,27 @@ def _create_mesh(chunk: ET.Element, vertices_all: list, triangles_all: list, mat
 
     chunk.append(lst)
 
-    _set_value(chunk, 'uint32', '2')  # MeshOctreeCellVersion
+    octree_ver = 1
+    _set_value(chunk, 'uint32', f'{octree_ver}')  # MeshOctreeCellVersion
 
-    box = _calculate_bounding_box(vertices_all)
+    if octree_ver == 1:
+        _set_value(chunk, 'int32', '0')
+        _set_value(chunk, 'int32', '0')
+    else:
+        box = _calculate_bounding_box(vertices_all)
 
-    lst = ET.Element('list')
-    ole = ET.Element('element')
+        lst = ET.Element('list')
+        ole = ET.Element('element')
 
-    _set_value(ole, 'int32', '1')
-    _set_value(ole, 'vec3', f'{box[0]} {box[1]} {box[2]}')
-    _set_value(ole, 'vec3', f'{box[3]} {box[4]} {box[5]}')
-    _set_value(ole, 'int32', '-1')
+        _set_value(ole, 'int32', '1')
+        _set_value(ole, 'vec3', f'{box[0]} {box[1]} {box[2]}')
+        _set_value(ole, 'vec3', f'{box[3]} {box[4]} {box[5]}')
+        _set_value(ole, 'int32', '-1')
 
-    lst.append(ole)
+        lst.append(ole)
 
-    # TODO properly implement MeshOctreeCells
-
-    chunk.append(lst)
+        # TODO properly implement MeshOctreeCells
+        chunk.append(lst)
 
 
 def create_xml(objects: list, tmf_mode: bool) -> ET.ElementTree:
@@ -239,6 +243,7 @@ def create_xml(objects: list, tmf_mode: bool) -> ET.ElementTree:
 
     logging.info(f'Vertex: {len(vertices_all)}')
     logging.info(f'Polygons: {len(triangles_all)}')
+    print(f'Estimated copper cost of the block: {len(vertices_all) / 100}')
 
     # Do the thing
 

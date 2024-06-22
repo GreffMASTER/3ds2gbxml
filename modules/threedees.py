@@ -2,6 +2,9 @@ import logging
 import struct
 from io import BytesIO
 
+import numpy as np
+
+from CPlugErrors import NoTrimeshError
 
 class IncorrectFormatError(BaseException):
     pass
@@ -66,7 +69,9 @@ class Chunk:
             logging.info(f'Next chunk: "{hex(chunk_id)}" of size {chunk_size}')
             logging.info('------------------')
             # go back to start of the chunk
+
             self.file.seek(-6, 1)
+            logging.info(f'Position: {hex(self.file.tell())}')
             chunk_data = self.file.read(chunk_size)
 
             try:
@@ -87,6 +92,8 @@ class Chunk:
                         self.children.append(TriangularMesh(chunk_data))
                     case 0x4110:
                         self.children.append(VerticesList(chunk_data))
+                    case 0x4112:
+                        self.children.append(VertexNormals(chunk_data))
                     case 0x4115:
                         self.children.append(VertexColors(chunk_data))
                     case 0x4120:
@@ -415,6 +422,26 @@ class VerticesList(Chunk):
             raise
 
 
+class VertexNormals(Chunk):
+    vertex_normals: list = []
+
+    def __init__(self, data: bytes):
+        try:
+            super().__init__(data)
+            self.vertex_normals: list = []
+            vertex_count = struct.unpack('<H', self.file.read(2))[0]
+
+            logging.info(f'Vertex normal count: {vertex_count}')
+            for i in range(vertex_count):
+                vertex_normal = struct.unpack('<fff', self.file.read(12))
+                self.vertex_normals.append(vertex_normal)
+            super()._load_children(vertex_count)
+        except struct.error as e:
+            raise DataError(self.file.tell(), e.args)
+        except DataError:
+            raise
+
+
 class VertexColors(Chunk):
     vertex_colors: list = []
 
@@ -505,6 +532,87 @@ class MainChunk(Chunk):
             super()._load_children()
         except DataError:
             raise
+
+    def GetAllObjects(self):
+        objects = []
+
+        for editor_chunk in self.children:
+            if isinstance(editor_chunk, EditorChunk):
+                for obj in editor_chunk.children:
+                    if isinstance(obj, ObjectBlock):
+                        if len(obj.children) > 0:
+                            objects.append(obj)
+        return objects
+
+    def GetAllVertices(self, UseVertex: bool = False):
+        objects = self.GetAllObjects()
+        vertices_all = []
+
+        for model_object in objects:
+            trimesh: TriangularMesh = model_object.children[0]
+            if not trimesh or not isinstance(trimesh, TriangularMesh):
+                raise NoTrimeshError
+            for child in trimesh.children:
+                if isinstance(child, VerticesList):
+                    for vert in child.vertices:
+                        vert: Vertex
+                        if UseVertex:
+                            vertices_all.append(vert)
+                        else:
+                            vertices_all.append(vert.pos)
+
+        return vertices_all
+
+    def GetAllFaces(self):
+        objects = self.GetAllObjects()
+
+        vert_count = 0
+        face_count = 0
+        vertices_all = []
+        triangles_all = []
+
+        # adding all the vertices and faces into big global arrays
+        # setting the vertex and face indexes by an offset
+        for model_object in objects:
+            new_vert_count = 0
+            new_face_count = 0
+
+            trimesh: TriangularMesh = model_object.children[0]
+            if not trimesh or not isinstance(trimesh, TriangularMesh):
+                raise NoTrimeshError
+
+            for child in trimesh.children:
+                if isinstance(child, VerticesList):
+                    new_vert_count = len(child.vertices)
+                    vertices_all = vertices_all + child.vertices
+
+                if isinstance(child, FacesDescription):
+                    temp = child.polygons.copy()
+                    for i in range(len(temp)):  # Update vertex references
+                        poly = temp[i]
+                        new_poly = (poly[0] + vert_count, poly[1] + vert_count, poly[2] + vert_count)
+                        temp[i] = new_poly
+                    new_face_count = len(temp)
+                    triangles_all = triangles_all + temp
+
+            vert_count = vert_count + new_vert_count
+            face_count = face_count + new_face_count
+
+        return triangles_all
+
+    def GetAllNormals(self):
+        normal_all = []
+        normals = compute_normals(self.GetAllVertices(True), self.GetAllFaces())
+        for norm in normals:
+            n = []
+            for k in norm:
+                n.append(k)
+            normal_all.append(n)
+        return normal_all
+
+    def GetBoundingBox(self):
+        verts = self.GetAllVertices(True)
+        return _calculate_bounding_box(verts)
 
 
 class Frames(Chunk):
@@ -634,6 +742,62 @@ class KeyFramerObjectHierarchyPosition(Chunk):
             self.u2 = struct.unpack('<H', self.file.read(2))[0]
         except DataError:
             raise
+
+
+def compute_normals(vertex: list[Vertex], facet: list[tuple]):
+    normals = []
+    vertexNormalLists = [[] for i in range(0, len(vertex))]
+    for face in facet:
+        a = vertex[face[0]].pos
+        b = vertex[face[1]].pos
+        c = vertex[face[2]].pos
+        AB = np.array(a) - np.array(b)
+        AC = np.array(a) - np.array(c)
+        n = np.cross(AB, AC)
+        n /= np.linalg.norm(n)
+        for i in range(0, 3):
+            vertexNormalLists[face[i]].append(n)
+    for idx, normalList in enumerate(vertexNormalLists):
+        normalSum = np.zeros(3)
+        for normal in normalList:
+          normalSum += normal
+        normal = normalSum / float(len(normalList))
+        normal /= np.linalg.norm(normal)
+        normals.append(map(float, normal.tolist()))
+    return normals
+
+
+def _calculate_bounding_box(verts):
+    max_x = verts[0].pos[0]
+    max_y = verts[0].pos[1]
+    max_z = verts[0].pos[2]
+    min_x = max_x
+    min_y = max_y
+    min_z = max_z
+    for v in verts:
+        # get biggest x y z values
+        if v.pos[0] > max_x:
+            max_x = v.pos[0]
+        if v.pos[1] > max_y:
+            max_y = v.pos[1]
+        if v.pos[2] > max_z:
+            max_z = v.pos[2]
+        # get smallest x y z values
+        if v.pos[0] < min_x:
+            min_x = v.pos[0]
+        if v.pos[1] < min_y:
+            min_y = v.pos[1]
+        if v.pos[2] < min_z:
+            min_z = v.pos[2]
+    # calculate center of the mesh
+    cen_x = (max_x + min_x) / 2
+    cen_y = (max_y + min_y) / 2
+    cen_z = (max_z + min_z) / 2
+    # calculate size of the mesh
+    siz_x = (max_x - min_x) / 2
+    siz_y = (max_y - min_y) / 2
+    siz_z = (max_z - min_z) / 2
+    return cen_x, cen_y, cen_z, siz_x, siz_y, siz_z
 
 
 def read_3ds(path: str) -> MainChunk:

@@ -3,8 +3,9 @@ import os
 
 import numpy as np
 import xml.etree.ElementTree as ET
-from modules.threedees import FacesDescription, MappingCoordinatesList, TriangularMesh, VerticesList, MappingCoordinates, ObjectBlock, Vertex, \
-    VertexColors
+from modules.threedees import FacesDescription, MappingCoordinatesList, TriangularMesh, VerticesList, \
+    MappingCoordinates, ObjectBlock, Vertex, \
+    VertexColors, VertexNormals
 from CPlugErrors import NoTrimeshError, NoVerticesError, NoFacesError
 
 
@@ -30,6 +31,7 @@ def compute_normals_gm(vertex: list[Vertex], faces: list[tuple]):
 
 
 def compute_normals(vertex: list[Vertex], facet: list[tuple]):
+    logging.info('Computing normals from faces')
     normals = []
     vertexNormalLists = [[] for i in range(0, len(vertex))]
     for face in facet:
@@ -67,6 +69,7 @@ def create_anim_xml(objects: list) -> ET.ElementTree:
     vertices = None
     triangles = None
     colors = None
+    pre_normals = None
     color_diff = 0
 
     all_verts: list = []
@@ -95,6 +98,8 @@ def create_anim_xml(objects: list) -> ET.ElementTree:
             vertices = child
         if isinstance(child, FacesDescription):
             triangles = child
+        if isinstance(child, VertexNormals):
+            pre_normals = child
         if isinstance(child, VertexColors):
             colors = child
         if isinstance(child, MappingCoordinatesList):
@@ -153,7 +158,7 @@ def create_anim_xml(objects: list) -> ET.ElementTree:
         el_xml.append(value)
 
         value = ET.Element('uint32')
-        value.text = f'{len(vertices.vertices) * 3}'
+        value.text = f'{len(vertices.vertices) * 6}'
         el_xml.append(value)
 
         list_xml.append(el_xml)
@@ -262,6 +267,7 @@ def create_anim_xml(objects: list) -> ET.ElementTree:
         obj_vertices: VerticesList = None
         obj_tris: FacesDescription = None
         obj_colors: VertexColors = None
+        obj_normals = None
         obj_mesh: TriangularMesh = obj.children[0]
         if not obj_mesh or not isinstance(obj_mesh, TriangularMesh):
             raise NoTrimeshError
@@ -273,8 +279,12 @@ def create_anim_xml(objects: list) -> ET.ElementTree:
                 obj_tris: FacesDescription = child
             if isinstance(child, VertexColors):
                 obj_colors: VertexColors = child
-
-        obj_normals = compute_normals(obj_vertices.vertices, obj_tris.polygons)
+            if isinstance(child, VertexNormals):
+                obj_normals: VertexNormals = child
+        if not obj_normals:
+            lst_normals = compute_normals(obj_vertices.vertices, obj_tris.polygons)
+        else:
+            lst_normals = obj_normals.vertex_normals
 
         i = 0
         last_color = (1, 1, 1)
@@ -287,7 +297,7 @@ def create_anim_xml(objects: list) -> ET.ElementTree:
             # Vertex normal
             value = ET.Element('vec3')
 
-            normal = obj_normals[i]
+            normal = lst_normals[i]
             txt = ''
             for v in normal:
                 txt += f'{v} '
@@ -353,6 +363,7 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     vertices = None
     triangles = None
     colors = None
+    obj_normals = None
     color_diff = 0
 
     trimesh: TriangularMesh = model_object.children[0]
@@ -370,6 +381,8 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
             colors = child
         if isinstance(child, MappingCoordinatesList):
             uv_list = child
+        if isinstance(child, VertexNormals):
+            obj_normals = child
 
     if not triangles:
         raise NoFacesError
@@ -392,7 +405,10 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
     if colors:
         logging.info(f'Colors: {len(colors.vertex_colors)}')
 
-    normals = compute_normals(vertices.vertices, triangles.polygons)
+    if not obj_normals:
+        normals = compute_normals(vertices.vertices, triangles.polygons)
+    else:
+        normals = obj_normals.vertex_normals
 
     gbx = ET.Element('gbx')
     _set_multiple(gbx, GBX_XML_HEADER)
@@ -491,9 +507,6 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
             value.text = f'{uv_coord[0]} {uv_coord[1]}'
             logging.info(value.text)
             chunk.append(value)
-        
-        
-
 
     value = ET.Element('bool')
     value.text = '1'
