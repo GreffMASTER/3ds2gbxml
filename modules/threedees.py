@@ -385,7 +385,7 @@ class FacesDescription(Chunk):
                 polygon = struct.unpack('<HHHH', self.file.read(8))
                 self.polygons.append(polygon)
             logging.info(f'Polygon count: {len(self.polygons)}')
-            super()._load_children(1)
+            super()._load_children()
         except struct.error as e:
             raise DataError(self.file.tell(), e.args)
         except DataError:
