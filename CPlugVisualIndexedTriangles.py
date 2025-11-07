@@ -134,7 +134,7 @@ def create_anim_xml(objects: list) -> ET.ElementTree:
 
     chunk = ET.Element('chunk')
     _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '001'})
-    chunk.append(ET.Element('node'))
+    chunk.append(ET.Element('lookbackstr'))
     body.append(chunk)
 
     chunk = ET.Element('chunk')
@@ -417,7 +417,7 @@ def create_xml(model_object: ObjectBlock) -> ET.ElementTree:
 
     chunk = ET.Element('chunk')
     _set_multiple(chunk, {'class': 'CPlugVisual', 'id': '001'})
-    chunk.append(ET.Element('node'))
+    chunk.append(ET.Element('lookbackstr'))
     body.append(chunk)
 
     chunk = ET.Element('chunk')
