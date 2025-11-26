@@ -7,19 +7,20 @@ Requires Python3 and NumPy.
 
 From "HowTo.txt":
 ```
-For use with TM 1.0 only, experimental use only, collisions are unfinished
+How to create a custom Solid file using 3ds. GreffMASTER 2023-2025
 
-Here is a template for converting 3ds files to TrackManias Solid files in a form of xml that need to be compiled using `gbxc`
-You can find `gbxc` here: https://github.com/GreffMASTER/gbxc
-Made for block models
+Created for use with TM 1.0, works in later games. This project is still very much in development. Expect bugs and issues.
 
-1. Use `3ds2gbxc.py` on your 3ds model: python 3ds2gbxc.py model.3ds -c
-2. You will get 2 files for each object in the file, visual mesh and collision mesh
-3. Edit the Template.Solid.xml and ModelElements.CPlugTree.xml files and follow the steps there
+Here is a template for converting 3ds files to TrackManias Solid files in a form of xml that need to be compiled using `gbxc`.
+You can find `gbxc` here: https://github.com/GreffMASTER/gbxc.
+
+1. Use `3ds2gbxc.py` on your 3ds model: python 3ds2gbxc.py model.3ds -vs
+2. You will get visual mesh files for each object as well as a single collision mesh file of all objects
+3. Edit the Template.Solid.xml, Root.CPlugTree.xml, ModelElements.CPlugTree.xml and Model.CPlugTree.xml files and follow the steps there
 4. Compile the Template.Solid.xml file with `gbxc`
 
 Tested with blender 2.79 3ds models and plugins for modern blender
-Also supports vertex colors (partially) with custom plugin fork: https://github.com/GreffMASTER/blender_export_tmf
+Also supports vertex colors and multiple uv layers with custom plugin fork: https://github.com/GreffMASTER/blender_export_tmf (for blender 3.6.0)
 
 To set a surface type for a model object, give it a material with one of these names (case sensitive):
 Concrete
@@ -53,4 +54,5 @@ Bumper
 NotCollidable
 FreeWheeling
 TurboRoulette
+
 ```
