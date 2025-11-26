@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<gbx version="6" unknown="R" class="CPlugSolid" complvl="1">
+    <reference_table ancestor="1">
+        <!-- Please fill the reference table manually -->
+        <!-- This example uses GameData/Speed/Media/Solid as current dir -->
+        <dir name="Material">
+            <!-- Add your materials here -->
+            <!-- Example -->
+            <file flags="1" name="SpeedSand.Material.Gbx" usefile="0" refname="sand"/>
+        </dir>
+    </reference_table>
+    <body>
+        <chunk class="CPlugSolid" id="000">
+            <uint32>2</uint32> <!-- type and index -->
+        </chunk>
+        <chunk class="CPlugSolid" id="007">
+            <uint32>0</uint32> <!-- does something to every tree -->
+        </chunk>
+        <chunk class="CPlugSolid" id="00D">
+            <uint32>1</uint32>
+            <uint32>0</uint32> <!-- If 0, use CPlugTree, if 1, use CPlugSolid -->
+            <!-- Modify the file listed below -->
+            <node link="Root.CPlugTree.xml"/> <!-- CPlugTree -->
+        </chunk>
+        <chunk class="CPlugSolid" id="00E">
+            <float>1.0</float> <!-- Mass -->
+            <float>0.0<float>
+            <float>0.0<float>
+            <float>0.0<float>
+            
+            <!-- ISO3 -->
+            <vec3>1.0 0.0 0.0</vec3>
+            <vec3>0.0 1.0 0.0</vec3>
+            <vec3>0.0 0.0 1.0</vec3>
+            
+            <float>0.1</float> <!-- LinearFluidFriction -->
+            <float>0.3</float> <!-- AngularFluidFriction -->
+            <float>0.3</float> <!-- MaxDistPerStep -->
+        </chunk>
+        <chunk class="CPlugSolid" id="00F">
+            <float>0</float>
+            <float>0</float>
+        </chunk>
+    </body>
+</gbx>
